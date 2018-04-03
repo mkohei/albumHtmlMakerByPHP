@@ -122,6 +122,11 @@ A:<input type="text" name="filename"/>
     } else {
         mkdir("pages");
     }
+    // views (theta)
+    if (file_exists("views")) {
+    } else {
+        mkdir("views");
+    }
     // index.html
     if (isset($data[0])) {
         file_put_contents(
@@ -133,10 +138,21 @@ A:<input type="text" name="filename"/>
     }
     // pages/*.html
     foreach($data as $page) {
+        // make [page.html]
         file_put_contents(
             "pages/".$page["page_name"].".html", 
             make_html($page["page_name"], $nav, make_content($photos,$page["page_name"], $page["sections"]))
         );
+    }
+
+    // make [view.html]
+    foreach ($photos as $photo) {
+        if (isTakenByTheta("photos/".$photo)) {
+            file_put_contents(
+                "views/".$photo.".html",
+                make_view_html($photo)
+            );
+        }
     }
 ?>
 
@@ -204,7 +220,6 @@ A:<input type="text" name="filename"/>
         } else {
             image_input.value = imagename;
         }
-        image_input.placeholder = id; // FIXME:
         image_item.appendChild(image_input);
 
         /*** append to image list ***/
@@ -229,7 +244,6 @@ A:<input type="text" name="filename"/>
         } else {
             section_input.value = secname;
         }
-        section_input.placeholder = id; // FIXME:
         section_item.appendChild(section_input);
 
         /*** image list ***/
@@ -275,7 +289,6 @@ A:<input type="text" name="filename"/>
         } else {
             page_input.value = pagename;
         }
-        page_input.placeholder = id; // FIXME:
         page_item.appendChild(page_input);
 
         /*** page <br> ***/
@@ -533,6 +546,17 @@ A:<input type="text" name="filename"/>
         return sprintf($image_item, $name, $name);
     }
 
+    function make_theta_item($name) {
+        $theta_item = '
+            <li class="thumbnail">
+            <a href="../views/%s.html">
+            <img src="../thumbs/%s">
+            </a>
+            </li>
+        ';
+        return sprintf($theta_item, $name, $name);
+    }
+
     function make_section($num, $name, $image_items) {
         $section_html = '
             <div id="%d">%s</div>
@@ -557,7 +581,11 @@ A:<input type="text" name="filename"/>
                 $reg = "/^".$image."$/";
                 foreach($photos as $photo) {
                     if (preg_match($reg, $photo, $result)) {
-                        $image_items = $image_items.make_image_item($photo);
+                        if (isTakenByTheta("photos/".$photo)) {
+                            $image_items = $image_items.make_theta_item($photo);
+                        } else {
+                            $image_items = $image_items.make_image_item($photo);
+                        }
                     }
                 }
             }
@@ -588,6 +616,39 @@ A:<input type="text" name="filename"/>
         return sprintf($indexhtml, $url);
     }
 
+    function make_view_html($name) {
+        $view_html = '
+            <!DOCTYPE html>
+            <html lang="ja">
+            <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta http-equiv="X-UA-Compatible" content="ie=edge">
+            <title>%s</title>
+            <script src="https://aframe.io/releases/0.4.0/aframe.min.js"></script>
+            </head>
+            <body>
+            <a-scene>
+            <a-sky src="../photos/%s" rotation="0 0 0"></a-sky>
+            </a-scene>
+            </body>
+            </html>
+        ';
+        return sprintf($view_html, $name, $name);
+    }
+
+?>
+
+<!-- function isTakenByTheta -->
+<?php
+function isTakenByTheta($filepath) {
+    $model = exif_read_data($filepath)["Model"];
+    if (strpos($model, "THETA") === false) {
+        return false;
+    } else {
+        return true;
+    }
+}
 ?>
 
 

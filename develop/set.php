@@ -17,76 +17,132 @@ A:<input type="text" name="filename"/>
 </form>
 -->
 
-<!-- POST PHP -->
-<!--
+<!-- make photos and thumbs (dir) -->
 <?php
+    $reg = "/^\w+\.(png|jpg|PNG|JPG)"."$/";
     $photos = scandir("./photos");
-    // remove not IMG file
-    $reg = "/^".$_POST['filename']."\.(png|jpg|PNG|JPG)"."$/";
-    echo $reg."<br>";
     foreach($photos as $key => $photo) {
         if (preg_match($reg, $photo, $result)) {
         } else {
             unset($photos[$key]);
         }
     }
-    //var_dump($photos);
-
+    if (file_exists("thumbs")) {
+    } else {
+        mkdir("thumbs");
+    }
+    $thumbs = scandir("./thumbs");
+    foreach($thumbs as $key => $thumb) {
+        if (preg_match($reg, $thumb, $result)) {
+        } else {
+            unset($thumbs[$key]);
+        }
+    }
     /*
     foreach($photos as $key => $photo) {
         make_thumbnail($photo);
     }
     */
 ?>
--->
-
-
-<hr>
 
 
 <!-- update JSON from POST (deploy button) -->
 <?php
-    //var_dump($_POST);
-    // POST(form) -> set.json(JSON)
-    $data = array();
-    $pagecount = -1;
-    foreach($_POST as $key => $val) {
-        if (strpos($key, 'page_input') !== false) {
-            $pagename = $val;
-            $data[] = array();
-            $i = count($data) - 1;
-            $data[$i]["page_name"] = $pagename;
-            $data[$i]["sections"] = array();
+    # GET  -> from JSON
+    # POST -> from $_POST
+    if ($_SERVER["REQUEST_METHOD"] == "GET") {
+        $json_file = "set.json";
+        if (file_exists($json_file)) {
+            $json = file_get_contents($json_file);
+            $json = mb_convert_encoding($json, 'UTF8', 'ASCII,JIS,UTF-8,EUC-JP,SJIS-WIN');
+            $data = json_decode($json, true);
+        } else {
+            $data = array();
+        }
 
-        } else if (strpos($key, 'section_input') !== false) {
-            $secname = $val;
-            $data[$i]["sections"][] = array();
-            $j = count($data[$i]["sections"]) - 1;
-            $data[$i]["sections"][$j]["sec_name"] = $val;
-            $data[$i]["sections"][$j]["images"] = array();
+    } else if ($_SERVER["REQUEST_METHOD"] == "POST") {
+        $data = array();
 
-        } else if (strpos($key, 'image_input') !== false) {
-            $data[$i]["sections"][$j]["images"][] = $val;
+        //var_dump($_POST);
+        // POST(form) -> set.json(JSON)
+        $pagecount = -1;
+        foreach($_POST as $key => $val) {
+            if (strpos($key, 'page_input') !== false) {
+                $pagename = $val;
+                $data[] = array();
+                $i = count($data) - 1;
+                $data[$i]["page_name"] = $pagename;
+                $data[$i]["sections"] = array();
+
+            } else if (strpos($key, 'section_input') !== false) {
+                $secname = $val;
+                $data[$i]["sections"][] = array();
+                $j = count($data[$i]["sections"]) - 1;
+                $data[$i]["sections"][$j]["sec_name"] = $val;
+                $data[$i]["sections"][$j]["images"] = array();
+
+            } else if (strpos($key, 'image_input') !== false) {
+                $data[$i]["sections"][$j]["images"][] = $val;
+            }
         }
     }
-    $json = json_encode($data, JSON_PRETTY_PRINT);
-    echo $json; # FIXME:
-    file_put_contents("set.json", $json);
+    
 ?>
 
 
-<!-- load JSON -->
+<!-- make [album].html -->
 <?php
-    // load JSON
-    $json_file = "set.json";
-    if (file_exists($json_file)) {
-        $json = file_get_contents($json_file);
-        $json = mb_convert_encoding($json, 'UTF8', 'ASCII,JIS,UTF-8,EUC-JP,SJIS-WIN');
-        $data = json_decode($json, true);
-    } else {
-        $data = array();
-    }
+    /*** REVIEW: DEBUG ***/
+    $out = "";
+    //var_dump($photos);
+    foreach($data as $page) {
+        $out = $out.$page["page_name"]."\n";
 
+        foreach($page["sections"] as $section) {
+            $out = $out."  ".$section["sec_name"]."\n";
+
+            foreach($section["images"] as $image) {
+                $reg = "/^".$image."$/";
+                foreach($photos as $key => $photo) {
+                    if (preg_match($reg, $photo, $result)) {
+                    //if (true) {
+                        $out = $out."    ".$photo."\n";
+                    }
+                }
+            }
+        }
+    }
+    //echo $out;
+    file_put_contents("test.txt", $out);
+    $nav = make_nav($data);
+
+    /*** true ***/
+    // confirm to exist directory and make
+    if (file_exists("pages")) {
+    } else {
+        mkdir("pages");
+    }
+    // index.html
+    if (isset($data[0])) {
+        file_put_contents(
+            "index.html",
+            make_index_html(
+                "pages/".$data[0]["page_name"].".html"
+            )
+        );
+    }
+    // pages/*.html
+    foreach($data as $page) {
+        file_put_contents(
+            "pages/".$page["page_name"].".html", 
+            make_html($page["page_name"], $nav, make_content($photos,$page["page_name"], $page["sections"]))
+        );
+    }
+?>
+
+
+<!-- load image files -->
+<?php
     // photos
     $photos = scandir("./photos");
     // remove not IMG file
@@ -105,6 +161,28 @@ A:<input type="text" name="filename"/>
     <ul id="page list">
     </ul>
 </form>
+
+<!-- deploy_button.onclick
+    * make thumbnail
+    * make json file
+-->
+<script>
+    document.getElementById("deploy_button").onclick = function() {
+        <?php
+            # make json
+            $json = json_encode($data, JSON_PRETTY_PRINT);
+            file_put_contents("set.json", $json);
+            
+            # make thumbnails
+            foreach($photos as $photo) {
+                if (in_array($photo, $thumbs)) {
+                } else {
+                    make_thumbnail($photo);
+                }
+            }
+        ?>
+    }
+</script>
 
 
 <!-- Define functions to add items -->
@@ -276,31 +354,240 @@ A:<input type="text" name="filename"/>
 
 <!-- make thumbnail function [PHP] -->
 <?php
-function make_thumbnail($file) {
-    /*** path ***/
-    $filename = "photos"."/".$file;
+    function make_thumbnail($file) {
+        /*** path ***/
+        $filename = "photos"."/".$file;
 
-    /*** base ***/
-    $thumbW = 300;
-    $thumbH = 300;
-    $newimg = imagecreatetruecolor($thumbW, $thumbH);
+        /*** base ***/
+        $thumbW = 300;
+        $thumbH = 300;
+        $newimg = imagecreatetruecolor($thumbW, $thumbH);
 
-    /*** size ***/
-    list($w, $h) = getimagesize($filename);
-    $L = min( array($w, $h) );
+        /*** size ***/
+        list($w, $h) = getimagesize($filename);
+        $L = min( array($w, $h) );
 
-    /*** open image (each format) ***/
-    $contype = mime_content_type($filename);
-    if (strcmp($contype, "image/jpeg")==0) {
-        $img = imagecreatefromjpeg($filename);
+        /*** open image (each format) ***/
+        $contype = mime_content_type($filename);
+        if (strcmp($contype, "image/jpeg")==0) {
+            $img = imagecreatefromjpeg($filename);
+        }
+
+        /*** resize & trim ***/
+        $ret = imagecopyresampled($newimg, $img, 0, 0, $w/2-$L/2, $h/2-$L/2, $thumbW, $thumbH, $L, $L);
+
+        /*** output ***/
+        imagejpeg($newimg, "thumbs/".$file);
+    }
+?>
+
+<!-- make html functions [PHP] -->
+<?php
+    function make_html($title, $nav, $content) {
+        # $nav, $content
+        $html = '
+            <!DOCTYPE html>
+            <html lang="ja">
+
+            <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta http-equiv="X-UA-Compatible" content="ie=edge">
+            <title>%s</title>
+
+            <!-- drawer.css -->
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/drawer/3.2.2/css/drawer.min.css">
+            <!-- jquery & iScroll -->
+            <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.3/jquery.min.js"></script>
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/iScroll/5.2.0/iscroll.min.js"></script>
+            <!-- drawer.js -->
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/drawer/3.2.2/js/drawer.min.js"></script>
+
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/twitter-bootstrap/3.3.7/js/bootstrap.min.js"></script>
+
+            <style>
+            body {
+            margin: 0;
+            padding: 0 1.5vw 0 2vw;
+            }
+            </style>
+            </head>
+
+            <style>
+            ul.thumbnail {
+            list-style-type: none;
+            margin: 0;
+            padding: 0;
+            display: block;
+            }
+
+            li.thumbnail {
+            float: left;
+            margin: 0;
+            }
+
+            img {
+            width: 31vw;
+            margin: 0 0.5vw 0 0.5vw;
+            }
+
+            br {
+            clear: left;
+            }
+
+            div {
+            clear: left;
+            padding: 0;
+            margin: 20px 0 20px 0;
+            }
+
+            h2 {
+            margin: 20px 0 0 10vw;
+            }
+            </style>
+
+            <body class="drawer drawer--left">
+            <header role="banner">
+            <button type="button" class="drawer-toggle drawer-hamburger">
+            <span class="sr-only">toggle navigation</span>
+            <span class="drawer-hamburger-icon"></span>
+            </button>
+
+            <nav class="drawer-nav" role="navigation">
+            <ul class="drawer-menu">
+            %s
+            </ul>
+            </nav>
+
+            </header>
+            <main role="main">
+            <!-- Page content -->
+            %s
+            </main>
+
+
+            <script>
+            $(document).ready(function() {
+            $(".drawer").drawer();
+            });
+            </script>
+
+            </body>
+
+            </html>
+        ';
+        return sprintf($html, $title, $nav, $content);
     }
 
-    /*** resize & trim ***/
-    $ret = imagecopyresampled($newimg, $img, 0, 0, $w/2-$L/2, $h/2-$L/2, $thumbW, $thumbH, $L, $L);
+    # FIXME:
+    function make_nav($data) {
+        $out = "";
+        foreach($data as $page) {
 
-    /*** output ***/
-    imagejpeg($newimg, "thumbs/".$file);
-}
+            $dropdown_items = "";
+            foreach($page["sections"] as $key => $section) {
+                $dropdown_items = $dropdown_items.make_dropdown_menu_item($key, $section["sec_name"]);
+
+                foreach($section["images"] as $image) {
+                    
+                }
+            }
+            $out = $out.make_menu_item("#", $page["page_name"], $dropdown_items);
+            return $out;
+        }
+    }
+
+    function make_menu_item($url, $name, $dropdown_menu_items) {
+        # $url, $name, $dropdown_items
+        $menu_item = '
+            <li class="drawer-dropdown">
+            <a class="drawer-menu-item" data-target="#" href="%s" data-toggle="dropdown" role="button" aria-expanded="false">
+            %s <span class="drawer-caret"></span>
+            </a>
+            <ul class="drawer-dropdown-menu">
+            %s
+            </ul>
+            </li>
+        ';
+
+        return sprintf($menu_item, $url, $name, $dropdown_menu_items);
+    }
+
+    function make_dropdown_menu_item($num, $name) {
+        # $num, $name
+        $dropdown_menu_item = '
+            <li><a class="drawer-dropdown-menu-item" href="#%d">%s</a></li>
+        ';
+
+        return sprintf($dropdown_menu_item, $num, $name);
+    }
+
+    function make_image_item($name) {
+        $image_item = '
+            <li class="thumbnail">
+            <a href="../photos/%s">
+            <img src="../thumbs/%s">
+            </a>
+            </li>
+        ';
+        return sprintf($image_item, $name, $name);
+    }
+
+    function make_section($num, $name, $image_items) {
+        $section_html = '
+            <div id="%d">%s</div>
+            <ul class="thumbnail">
+                %s
+            </ul>
+            <br>
+        ';
+        return sprintf($section_html, $num, $name, $image_items);
+    }
+
+    function make_content($photos, $title, $sections) {
+        $content = '
+        <h2>%s</h2>
+        %s
+        ';
+        $out = "";
+        foreach($sections as $key => $section) {
+            
+            $image_items = "";
+            foreach($section["images"] as $image) {
+                $reg = "/^".$image."$/";
+                foreach($photos as $photo) {
+                    if (preg_match($reg, $photo, $result)) {
+                        $image_items = $image_items.make_image_item($photo);
+                    }
+                }
+            }
+            $out = $out.make_section($key, $section["sec_name"], $image_items);
+        }
+        return sprintf($content, $title, $out);
+    }
+
+
+    function make_index_html($url) {
+        # $url
+        $indexhtml = '
+            <!DOCTYPE html>
+            <html lang="ja">
+            <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <meta http-equiv="X-UA-Compatible" content="ie=edge">
+            <title>Document</title>
+            </head>
+            <body>
+            <script>
+            window.location = "%s"
+            </script>
+            </body>
+            </html>
+        ';
+        return sprintf($indexhtml, $url);
+    }
+
 ?>
 
 
